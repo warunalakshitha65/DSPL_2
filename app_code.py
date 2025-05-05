@@ -19,9 +19,12 @@ df.columns = df.columns.str.strip().str.lower()
 
 # Ensure expected columns exist
 required_columns = ['district', 'returnees', 'date']
-for col in required_columns:
-    if col not in df.columns:
-        raise ValueError(f"Missing required column: {col}")
+missing_cols = [col for col in required_columns if col not in df.columns]
+
+if missing_cols:
+    print("Available columns in the dataset:", df.columns.tolist())
+    print("First few rows of the dataset:\n", df.head())  # Optional for debugging
+    raise ValueError(f"Missing required column(s): {', '.join(missing_cols)}")
 
 # Convert date column to datetime
 df['date'] = pd.to_datetime(df['date'], errors='coerce')
@@ -122,6 +125,7 @@ def update_dashboard(selected_district):
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
+
 
 
 
