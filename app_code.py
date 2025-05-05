@@ -4,28 +4,47 @@ from dash.dependencies import Input, Output
 import pandas as pd
 import plotly.express as px
 
-# Load the data
-df = pd.read_csv("hdx_hapi_returnees_lka.csv")
+# ---------------------------------
+# Data Loading & Preprocessing
+# ---------------------------------
 
-# Convert date column if it exists
-if 'date' in df.columns:
-    df['date'] = pd.to_datetime(df['date'])
+# Load the dataset
+try:
+    df = pd.read_csv("hdx_hapi_returnees_lka.csv")
+except FileNotFoundError:
+    raise FileNotFoundError("The file 'hdx_hapi_returnees_lka.csv' was not found.")
 
-# Standardize column names (helps avoid KeyErrors due to spacing/casing)
+# Standardize column names
 df.columns = df.columns.str.strip().str.lower()
 
-# Confirm 'district' column exists
-if "district" in df.columns:
-    district_options = [{"label": i, "value": i} for i in sorted(df["district"].dropna().unique())]
-else:
-    district_options = []
-    print("Column 'district' not found in the DataFrame.")
+# Ensure expected columns exist
+required_columns = ['district', 'returnees', 'date']
+for col in required_columns:
+    if col not in df.columns:
+        raise ValueError(f"Missing required column: {col}")
 
-# Start Dash app
+# Convert date column to datetime
+df['date'] = pd.to_datetime(df['date'], errors='coerce')
+
+# Drop rows with missing or invalid dates
+df = df.dropna(subset=['date'])
+
+# Ensure 'returnees' column is numeric
+df['returnees'] = pd.to_numeric(df['returnees'], errors='coerce').fillna(0)
+
+# Drop rows with missing 'district'
+df = df.dropna(subset=['district'])
+
+# Prepare dropdown options
+district_options = [{"label": i, "value": i} for i in sorted(df["district"].unique())]
+
+# ---------------------------------
+# Dash App Setup
+# ---------------------------------
+
 app = dash.Dash(__name__)
 app.title = "Sri Lanka Returnees Dashboard"
 
-# Layout
 app.layout = html.Div([
     html.H1("Sri Lanka Returnees Dashboard", style={'textAlign': 'center'}),
 
@@ -48,7 +67,10 @@ app.layout = html.Div([
     dcc.Graph(id="map-graph")
 ])
 
+# ---------------------------------
 # Callbacks
+# ---------------------------------
+
 @app.callback(
     [Output("summary-stats", "children"),
      Output("time-series-graph", "figure"),
@@ -60,20 +82,22 @@ def update_dashboard(selected_district):
     if selected_district:
         filtered_df = filtered_df[filtered_df["district"] == selected_district]
 
-    total = filtered_df["returnees"].sum() if "returnees" in df.columns else 0
-    latest_date = filtered_df["date"].max() if "date" in df.columns else None
+    total = int(filtered_df["returnees"].sum())
+    latest_date = filtered_df["date"].max()
     latest_returnees = 0
-    if latest_date is not None:
-        latest_returnees = filtered_df[filtered_df["date"] == latest_date]["returnees"].sum()
+    if pd.notnull(latest_date):
+        latest_returnees = int(filtered_df[filtered_df["date"] == latest_date]["returnees"].sum())
 
     summary = f"Total Returnees: {total:,} | Latest Month Returnees: {latest_returnees:,} ({latest_date.date() if latest_date else 'N/A'})"
 
-    # Time-series
-    if "date" in df.columns and "returnees" in df.columns:
-        time_fig = px.line(filtered_df, x="date", y="returnees", color="district",
-                           title="Returnees Over Time")
-    else:
-        time_fig = px.scatter(title="Time-series data not available")
+    # Time-series chart
+    time_fig = px.line(
+        filtered_df,
+        x="date",
+        y="returnees",
+        color="district" if not selected_district else None,
+        title="Returnees Over Time"
+    )
 
     # Map
     if {'latitude', 'longitude'}.issubset(df.columns):
@@ -81,20 +105,23 @@ def update_dashboard(selected_district):
             filtered_df,
             lat="latitude",
             lon="longitude",
-            color="returnees" if "returnees" in df.columns else None,
-            size="returnees" if "returnees" in df.columns else None,
-            hover_name="district" if "district" in df.columns else None,
+            color="returnees",
+            size="returnees",
+            hover_name="district",
             mapbox_style="carto-positron",
             title="Geographic Distribution of Returnees"
         )
     else:
-        map_fig = px.scatter(title="Map data not available")
+        map_fig = px.scatter(title="Map data not available (Missing latitude/longitude columns)")
 
     return summary, time_fig, map_fig
 
-# Run server
+# ---------------------------------
+# Run the App
+# ---------------------------------
+
 if __name__ == "__main__":
-    # Change from app.run_server() to app.run() as per Dash 2.x and later
     app.run(debug=True, use_reloader=False)
+
 
 
