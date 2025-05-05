@@ -94,4 +94,6 @@ def update_dashboard(selected_district):
 
 # Run server
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    # Change from app.run_server() to app.run() as per Dash 2.x and later
+    app.run(debug=True)
+
