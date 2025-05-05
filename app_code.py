@@ -317,5 +317,5 @@ st.markdown("---")
 st.caption("""
 Data Source: [HDX - Sri Lanka Returnees Dataset](https://data.humdata.org/)  
 Developed for University of Westminster - 5DATA004W Data Science Project Lifecycle  
-© 2025 [Yaddehi Lakshitha] - All rights reserved
+© 2025 [Yaddehi Lakshitha 👨‍🎓] - All rights reserved
 """)
