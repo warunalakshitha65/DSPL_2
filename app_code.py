@@ -17,13 +17,25 @@ except FileNotFoundError:
 # Standardize column names
 df.columns = df.columns.str.strip().str.lower()
 
+# Print available columns for debugging
+print("Available columns in the dataset:", df.columns.tolist())
+print("First few rows of the dataset:\n", df.head())
+
+# Try to map alternative names to expected names
+column_mapping = {
+    "district_name": "district",
+    "returnees_count": "returnees",
+    "reported_date": "date",
+    "districts": "district",
+    "num_returnees": "returnees"
+}
+df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns}, inplace=True)
+
 # Ensure expected columns exist
 required_columns = ['district', 'returnees', 'date']
 missing_cols = [col for col in required_columns if col not in df.columns]
 
 if missing_cols:
-    print("Available columns in the dataset:", df.columns.tolist())
-    print("First few rows of the dataset:\n", df.head())  # Optional for debugging
     raise ValueError(f"Missing required column(s): {', '.join(missing_cols)}")
 
 # Convert date column to datetime
@@ -125,6 +137,7 @@ def update_dashboard(selected_district):
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
+
 
 
 
