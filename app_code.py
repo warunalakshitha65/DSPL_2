@@ -4,18 +4,18 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 
-# =============================================
+
 # Page Configuration (MUST BE FIRST COMMAND)
-# =============================================
+
 st.set_page_config(
     page_title="Sri Lanka Population Movements Dashboard",
     page_icon="🇱🇰",
     layout="wide"
 )
 
-# =============================================
+
 # Custom CSS for Styling
-# =============================================
+
 st.markdown("""
     <style>
     .main {
@@ -38,9 +38,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# =============================================
+
 # Data Loading with Error Handling
-# =============================================
+
 @st.cache_data
 def load_data():
     try:
@@ -77,9 +77,9 @@ def load_data():
 
 df = load_data()
 
-# =============================================
+
 # Project Documentation Section
-# =============================================
+
 with st.expander("📝 Project Aims & Methodology", expanded=False):
     st.markdown("""
     ### Aims
@@ -117,18 +117,18 @@ with st.expander("📋 Requirements Specification", expanded=False):
     4. Persistent availability (Streamlit Cloud deployment)
     """)
 
-# =============================================
+
 # Dashboard Title and Description
-# =============================================
+
 st.title("🇱🇰 Sri Lanka Population Movements Analysis")
 st.markdown("""
 This dashboard provides insights into the movements of returnees and internally displaced persons (IDPs) in Sri Lanka from 2001 to 2023.
 The data is sourced from the [Humanitarian Data Exchange (HDX)](https://data.humdata.org/).
 """)
 
-# =============================================
+
 # Interactive Filters (Sidebar)
-# =============================================
+
 st.sidebar.title("Filters")
 years = st.sidebar.slider(
     "Select Year Range",
@@ -163,9 +163,9 @@ st.sidebar.download_button(
     mime="text/csv"
 )
 
-# =============================================
+
 # Filtered Data Application
-# =============================================
+
 filtered_df = df[
     (df['year'] >= years[0]) & 
     (df['year'] <= years[1]) & 
@@ -174,9 +174,9 @@ filtered_df = df[
     (df['age_range'].isin(age_ranges))
 ]
 
-# =============================================
+
 # Key Metrics Display
-# =============================================
+
 st.subheader("📊 Key Metrics")
 col1, col2, col3 = st.columns(3)
 total_population = filtered_df['population'].sum()
@@ -188,9 +188,9 @@ col2.metric("Years Covered", unique_years)
 avg_per_year = filtered_df.groupby('year')['population'].sum().mean()
 col3.metric("Average per Year", f"{avg_per_year:,.0f}")
 
-# =============================================
+
 # Main Visualizations
-# =============================================
+
 st.subheader("📈 Population Trends Over Time")
 trend_df = filtered_df.groupby(['year', 'population_group'])['population'].sum().reset_index()
 fig_trend = px.line(
@@ -242,9 +242,9 @@ with col2:
     )
     st.plotly_chart(fig_gender, use_container_width=True)
 
-# =============================================
+
 # Data Exploration Section
-# =============================================
+
 st.subheader("🔍 Detailed Data Exploration")
 
 # Year Comparison
@@ -272,9 +272,9 @@ if selected_years:
 if st.checkbox("📋 Show Raw Data Table"):
     st.dataframe(filtered_df.sort_values(['year', 'population_group', 'gender', 'age_range']))
 
-# =============================================
+
 # Testing Documentation
-# =============================================
+
 with st.expander("🧪 Test Plan & Results", expanded=False):
     st.markdown("""
     ### Test Cases (5 Required)
@@ -292,9 +292,9 @@ with st.expander("🧪 Test Plan & Results", expanded=False):
     - **Tester:** [Your Name]  
     """)
 
-# =============================================
+
 # Key Insights
-# =============================================
+
 st.subheader("💡 Key Insights")
 with st.expander("View Analysis Findings"):
     st.markdown("""
@@ -310,12 +310,12 @@ with st.expander("View Analysis Findings"):
        - Child-specific support needed for 5-17 age group (12% of population).
     """)
 
-# =============================================
+
 # Footer
-# =============================================
+
 st.markdown("---")
 st.caption("""
 Data Source: [HDX - Sri Lanka Returnees Dataset](https://data.humdata.org/)  
 Developed for University of Westminster - 5DATA004W Data Science Project Lifecycle  
-© 2024 [Your Name] - All rights reserved
+© 2025 [Yaddehi Lakshitha] - All rights reserved
 """)
