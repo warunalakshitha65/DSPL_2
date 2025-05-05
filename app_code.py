@@ -3,90 +3,89 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-st.set_page_config("Returnees Dashboard - Sri Lanka", layout="wide")
+# App Config
+st.set_page_config(page_title="Returnees Dashboard - Sri Lanka", layout="wide", page_icon="📊")
 
+# Load Data
 @st.cache_data
 def load_data():
     df = pd.read_csv("hdx_hapi_returnees_lka.csv")
-    df.columns = df.columns.str.strip().str.lower()
+    df.columns = df.columns.str.strip()
     df['reference_period_start'] = pd.to_datetime(df['reference_period_start'], errors='coerce')
-    df['year'] = df['reference_period_start'].dt.year
+    df['reference_period_end'] = pd.to_datetime(df['reference_period_end'], errors='coerce')
+    df['Year'] = df['reference_period_start'].dt.year
     df['population'] = pd.to_numeric(df['population'], errors='coerce')
-    df['min_age'] = pd.to_numeric(df['min_age'], errors='coerce')
-    df['max_age'] = pd.to_numeric(df['max_age'], errors='coerce')
-    df = df.dropna(subset=['population', 'gender', 'min_age', 'max_age'])
-    return df
+    return df.dropna(subset=["population"])
 
 df = load_data()
 
-# Header
-st.title("📦 Returnees Dashboard - Sri Lanka")
-st.caption("Explore trends of displaced population returnees using HDX dataset")
-
-# KPIs
-col1, col2, col3 = st.columns(3)
-col1.metric("📊 Total Returnees", int(df['population'].sum()))
-col2.metric("📄 Total Records", len(df))
-col3.metric("📆 Years", f"{df['year'].min()} - {df['year'].max()}")
-
-st.markdown("---")
+st.title("📊 Returnees Analytics Dashboard - Sri Lanka")
+st.caption("Explore returnee data based on origin, asylum, gender, and more — Powered by HDX")
 
 # Sidebar Filters
 with st.sidebar:
-    st.header("🔎 Filter Options")
-    selected_location = st.selectbox("Asylum Location", df['asylum_location_code'].dropna().unique())
-    selected_gender = st.selectbox("Gender", df['gender'].dropna().unique())
-    year_range = st.slider("Year Range", min_value=int(df['year'].min()), max_value=int(df['year'].max()),
-                           value=(int(df['year'].min()), int(df['year'].max())))
+    st.header("📂 Filters")
+    locations = st.multiselect("🌍 Asylum Location Code", options=df['asylum_location_code'].dropna().unique())
+    genders = st.multiselect("🚻 Gender", options=df['gender'].dropna().unique())
+    pop_groups = st.multiselect("👥 Population Group", options=df['population_group'].dropna().unique())
+    year_range = st.slider("📅 Year Range", int(df['Year'].min()), int(df['Year'].max()), (int(df['Year'].min()), int(df['Year'].max())))
 
-# Filtered DF
+# Apply filters
 filtered_df = df[
-    (df['asylum_location_code'] == selected_location) &
-    (df['gender'] == selected_gender) &
-    (df['year'].between(year_range[0], year_range[1]))
+    (df['Year'].between(year_range[0], year_range[1])) &
+    (df['asylum_location_code'].isin(locations) if locations else True) &
+    (df['gender'].isin(genders) if genders else True) &
+    (df['population_group'].isin(pop_groups) if pop_groups else True)
 ]
 
-# Line Chart
-st.subheader(f"📈 Trend of Returnees - {selected_location} ({selected_gender})")
-time_chart = filtered_df.groupby('year')['population'].sum().reset_index()
-fig = px.line(time_chart, x='year', y='population', markers=True, title="Population Over Time")
-st.plotly_chart(fig, use_container_width=True)
+# KPI Section
+st.markdown("### 📈 Overview")
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Records", f"{len(filtered_df):,}")
+col2.metric("Total Population", f"{int(filtered_df['population'].sum()):,}")
+col3.metric("Years Covered", f"{year_range[0]} - {year_range[1]}")
 
-# Bar Chart: Population Group
-st.subheader("🧑‍🤝‍🧑 Top Population Groups")
-top_groups = filtered_df.groupby('population_group')['population'].sum().nlargest(5).reset_index()
-fig_bar = px.bar(top_groups, x='population_group', y='population', title="Top 5 Groups")
-st.plotly_chart(fig_bar, use_container_width=True)
+st.markdown("---")
 
-# Heatmap: Gender vs Age
-st.subheader("🌡️ Gender & Age Heatmap")
-age_gender = df.groupby(['gender', 'min_age'])['population'].sum().reset_index()
-fig_heat = px.density_heatmap(age_gender, x='min_age', y='gender', z='population', histfunc='sum',
-                              color_continuous_scale='Plasma')
-st.plotly_chart(fig_heat, use_container_width=True)
+# Charts Section
+st.subheader("📊 Visual Insights")
 
-# Population Pyramid
-st.subheader("🔻 Population Pyramid (by Gender & Age)")
-pyramid_df = df[(df['min_age'] <= 100)].groupby(['gender', 'min_age'])['population'].sum().reset_index()
-males = pyramid_df[pyramid_df['gender'] == 'Male'].sort_values('min_age')
-females = pyramid_df[pyramid_df['gender'] == 'Female'].sort_values('min_age')
+# 1. Time Series by Year
+pop_by_year = filtered_df.groupby("Year")["population"].sum().reset_index()
+fig1 = px.line(pop_by_year, x="Year", y="population", markers=True, title="Population Trend Over Time")
+st.plotly_chart(fig1, use_container_width=True)
 
-fig_pyramid = go.Figure()
-fig_pyramid.add_trace(go.Bar(y=males['min_age'], x=-males['population'], name='Male', orientation='h'))
-fig_pyramid.add_trace(go.Bar(y=females['min_age'], x=females['population'], name='Female', orientation='h'))
-fig_pyramid.update_layout(barmode='overlay', title="Population Pyramid", xaxis_title="Population", yaxis_title="Age")
-st.plotly_chart(fig_pyramid, use_container_width=True)
+# 2. Population by Group and Gender
+fig2 = px.bar(
+    filtered_df.groupby(["population_group", "gender"])["population"].sum().reset_index(),
+    x="population_group", y="population", color="gender", barmode="group",
+    title="Population by Group and Gender"
+)
+st.plotly_chart(fig2, use_container_width=True)
 
-# Smart Insights
-st.subheader("💡 Smart Insights")
-most_returnees_year = time_chart.loc[time_chart['population'].idxmax(), 'year']
-st.markdown(f"- 📌 **Peak Returnee Year**: {most_returnees_year}")
-st.markdown(f"- 👥 **Most Common Group**: {top_groups.iloc[0]['population_group']}")
-st.markdown(f"- 🚻 **Gender Skew**: {df['gender'].value_counts().idxmax()}")
+# 3. Population Pyramid
+if 'min_age' in df.columns and 'max_age' in df.columns:
+    pyramid_df = filtered_df.copy()
+    pyramid_df['age_group'] = pyramid_df['min_age'].astype(str) + "-" + pyramid_df['max_age'].astype(str)
+    pyramid_df = pyramid_df.groupby(['age_group', 'gender'])['population'].sum().reset_index()
 
-# Table & Download
-st.subheader("📋 Filtered Data Table")
-st.dataframe(filtered_df.head(100))
-st.download_button("⬇ Download CSV", filtered_df.to_csv(index=False), file_name="filtered_returnees.csv")
+    male = pyramid_df[pyramid_df['gender'] == 'Male']
+    female = pyramid_df[pyramid_df['gender'] == 'Female']
+    male['population'] = -male['population']
+
+    fig3 = go.Figure()
+    fig3.add_trace(go.Bar(y=male['age_group'], x=male['population'], name='Male', orientation='h'))
+    fig3.add_trace(go.Bar(y=female['age_group'], x=female['population'], name='Female', orientation='h'))
+    fig3.update_layout(title='Population Pyramid', barmode='relative')
+    st.plotly_chart(fig3, use_container_width=True)
+
+# Download Section
+st.subheader("📥 Download Filtered Data")
+st.download_button("⬇ Download CSV", data=filtered_df.to_csv(index=False).encode("utf-8"), file_name="filtered_returnees.csv")
+
+# Raw Data Toggle
+with st.expander("📄 View Raw Data"):
+    st.dataframe(filtered_df)
+
 
 
