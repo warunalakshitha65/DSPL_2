@@ -16,6 +16,13 @@ if 'date' in df.columns:
 app = dash.Dash(__name__)
 app.title = "Sri Lanka Returnees Dashboard"
 
+print(df.columns)
+if "district" in df.columns:
+    options = [{"label": i, "value": i} for i in sorted(df["district"].dropna().unique())]
+else:
+    options = []
+    print("Column 'district' not found in the DataFrame.")
+
 # Layout
 app.layout = html.Div([
     html.H1("Sri Lanka Returnees Dashboard", style={'textAlign': 'center'}),
