@@ -1,66 +1,96 @@
-import pandas as pd
+# Returnees Analytics - Streamlit Dashboard (Distinct Version)
 
-# Load dataset
-df = pd.read_csv('hdx_hapi_returnees_lka.csv')
-
-# Strip whitespace from column names
-df.columns = df.columns.str.strip()
-
-# Check for missing values
-print(df.isnull().sum())
-
-# Drop rows with any missing values (or you can choose to fill them)
-df.dropna(inplace=True)
-
-# Convert date columns to datetime
-df['reference_period_start'] = pd.to_datetime(df['reference_period_start'])
-df['reference_period_end'] = pd.to_datetime(df['reference_period_end'])
-
-# Ensure numeric columns are correct
-df['population'] = pd.to_numeric(df['population'], errors='coerce')
-df = df.dropna(subset=['population'])  # Drop rows where population couldn't be converted
-
-# Optional: simplify or map codes to district names if known
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# Load and clean data
-df = pd.read_csv('hdx_hapi_returnees_lka.csv')
-df.columns = df.columns.str.strip()
-df.dropna(inplace=True)
-df['reference_period_start'] = pd.to_datetime(df['reference_period_start'])
-df['reference_period_end'] = pd.to_datetime(df['reference_period_end'])
-df['population'] = pd.to_numeric(df['population'], errors='coerce')
-df = df.dropna(subset=['population'])
+# Initial config
+st.set_page_config(page_title="Returnees Analytics - Sri Lanka", layout="centered", page_icon="📦")
 
-# Sidebar filters
-st.sidebar.title("Filters")
-selected_gender = st.sidebar.multiselect("Gender", options=df['gender'].unique(), default=df['gender'].unique())
-selected_group = st.sidebar.multiselect("Population Group", options=df['population_group'].unique(), default=df['population_group'].unique())
+# Load Data
+@st.cache_data
+def load_data():
+    return pd.read_csv("hdx_hapi_returnees_lka.csv")
 
-# Filtered data
-filtered_df = df[(df['gender'].isin(selected_gender)) & (df['population_group'].isin(selected_group))]
+df = load_data()
 
-# Main dashboard
-st.title("Returnees Dashboard - Sri Lanka")
+# Title & Description
+st.title("📦 Returnees Data Explorer - Sri Lanka")
+st.caption("Powered by HDX Data | Explore returnee trends across time and categories")
 
-# Total returnees
-st.metric("Total Returnees", int(filtered_df['population'].sum()))
+# Quick Overview Section
+with st.container():
+    st.subheader("🔍 Quick Glance")
+    col1, col2 = st.columns(2)
 
-# Returnees by Asylum Location
-asylum_chart = px.bar(filtered_df, x='asylum_location_code', y='population', color='gender', title="Returnees by Asylum Location")
-st.plotly_chart(asylum_chart)
+    with col1:
+        st.metric("Total Entries", len(df))
 
-# Returnees by Origin Location
-origin_chart = px.bar(filtered_df, x='origin_location_code', y='population', color='gender', title="Returnees by Origin Location")
-st.plotly_chart(origin_chart)
+    with col2:
+        num_cols = df.select_dtypes(include=["number"]).columns
+        if len(num_cols) > 0:
+            avg_val = df[num_cols[0]].mean()
+            st.metric(f"Average of {num_cols[0]}", f"{avg_val:.2f}")
 
-# Time trend
-time_chart = px.line(filtered_df.groupby('reference_period_start')['population'].sum().reset_index(), x='reference_period_start', y='population', title="Population Trend Over Time")
-st.plotly_chart(time_chart)
+# Filtering Section
+st.divider()
+st.subheader("📂 Data Filter")
 
-streamlit run dashboard.py
+if 'Year' in df.columns:
+    df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
 
+filter_column = st.selectbox("Choose a Category to Filter", df.select_dtypes(include='object').columns)
 
+unique_vals = df[filter_column].dropna().unique()
+selected_val = st.selectbox(f"Select a Value from '{filter_column}'", unique_vals)
 
+filtered_df = df[df[filter_column] == selected_val]
+
+# Select numeric field for analysis
+numeric_fields = df.select_dtypes(include=["number"]).columns.tolist()
+selected_metric = st.selectbox("Select a Numeric Field for Visualization", numeric_fields)
+
+# Charts Section
+st.divider()
+st.subheader("📊 Visual Exploration")
+
+chart_option = st.radio("Choose Visualization Type", ["Line", "Bar", "Box", "Area", "Histogram"])
+
+if chart_option == "Line":
+    if 'Year' in filtered_df.columns:
+        fig = px.line(filtered_df, x='Year', y=selected_metric, markers=True, title="Yearly Trend")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Year column is missing or invalid.")
+
+elif chart_option == "Bar":
+    top_n = filtered_df.nlargest(10, selected_metric)
+    fig = px.bar(top_n, x=filter_column, y=selected_metric, color=selected_metric, title="Top 10 by Value")
+    st.plotly_chart(fig, use_container_width=True)
+
+elif chart_option == "Box":
+    if 'Year' in filtered_df.columns:
+        fig = px.box(filtered_df, x='Year', y=selected_metric, points="outliers", title="Distribution by Year")
+        st.plotly_chart(fig, use_container_width=True)
+
+elif chart_option == "Area":
+    if 'Year' in filtered_df.columns:
+        area_df = filtered_df.groupby("Year")[selected_metric].sum().reset_index()
+        fig = px.area(area_df, x='Year', y=selected_metric, title="Cumulative Area Chart")
+        st.plotly_chart(fig, use_container_width=True)
+
+elif chart_option == "Histogram":
+    fig = px.histogram(filtered_df, x=selected_metric, nbins=30, title="Value Distribution")
+    st.plotly_chart(fig, use_container_width=True)
+
+# Stats + Download Section
+st.divider()
+with st.expander("📈 Statistical Summary"):
+    st.dataframe(filtered_df.describe())
+
+st.download_button(
+    label="⬇ Download This Filtered Dataset as CSV",
+    data=filtered_df.to_csv(index=False).encode("utf-8"),
+    file_name="filtered_returnees_data.csv",
+    mime="text/csv"
+)
