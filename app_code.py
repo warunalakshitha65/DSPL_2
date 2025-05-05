@@ -18,7 +18,7 @@ df = load_data()
 
 # Header
 st.title("📦 Returnees Analytics Dashboard - Sri Lanka")
-st.caption("Interactive exploration of returnee trends by location, gender, and year.")
+st.caption("Interactive exploration of returnee trends by location, gender, age and year.")
 
 # KPIs
 col1, col2, col3 = st.columns(3)
@@ -27,13 +27,13 @@ with col1:
 with col2:
     st.metric("Total Returnees", int(df['population'].sum()))
 with col3:
-    st.metric("Date Range", f"{df['reference_period_start'].min().date()} to {df['reference_period_start'].max().date()}")
+    st.metric("Year Range", f"{df['year'].min()} - {df['year'].max()}")
 
 st.markdown("---")
 
-# Filters
+# Sidebar Filters
 with st.sidebar:
-    st.header("🔍 Filter Data")
+    st.header("🔍 Filter Options")
     asylum_locations = sorted(df['asylum_location_code'].dropna().unique())
     selected_location = st.selectbox("Asylum Location", options=asylum_locations)
 
@@ -44,34 +44,53 @@ with st.sidebar:
     selected_years = st.slider("Select Year Range", min_value=int(min(years)), max_value=int(max(years)),
                                value=(int(min(years)), int(max(years))))
 
-# Apply filters
+# Filter Data
 filtered_df = df[
     (df['asylum_location_code'] == selected_location) &
     (df['gender'] == selected_gender) &
     (df['year'].between(selected_years[0], selected_years[1]))
 ]
 
-# Charts
 st.subheader(f"📊 Population Trends for {selected_location} - {selected_gender}")
+
 if filtered_df.empty:
-    st.warning("No data available for the selected filters.")
+    st.warning("No data available for selected filters.")
 else:
+    # Charts
     colA, colB = st.columns(2)
 
-    # Line chart: population over time
+    # Line Chart
     time_chart = filtered_df.groupby('year')['population'].sum().reset_index()
     fig_line = px.line(time_chart, x='year', y='population', markers=True, title="Population Over Time")
     colA.plotly_chart(fig_line, use_container_width=True)
 
-    # Bar chart: population by population group
-    pop_group = filtered_df.groupby('population_group')['population'].sum().reset_index()
-    fig_bar = px.bar(pop_group, x='population_group', y='population', color='population_group',
-                     title="Population by Group")
+    # Bar Chart: Population Groups
+    group_chart = filtered_df.groupby('population_group')['population'].sum().reset_index()
+    fig_bar = px.bar(group_chart, x='population_group', y='population', title="By Population Group")
     colB.plotly_chart(fig_bar, use_container_width=True)
 
-# Show Data + Download
-st.markdown("### 📄 Filtered Data Preview")
+    st.markdown("---")
+
+    # Top 5 Population Groups Table
+    st.subheader("🏆 Top 5 Population Groups by Population")
+    top5 = group_chart.sort_values(by='population', ascending=False).head(5)
+    st.table(top5)
+
+    # Histogram of Age Ranges
+    st.subheader("📊 Age Range Histogram")
+    if 'min_age' in filtered_df.columns:
+        fig_hist = px.histogram(filtered_df, x='min_age', nbins=20, title="Distribution by Minimum Age")
+        st.plotly_chart(fig_hist, use_container_width=True)
+
+    # Growth Rate
+    st.subheader("📈 Year-on-Year Growth")
+    time_chart['growth_%'] = time_chart['population'].pct_change() * 100
+    st.dataframe(time_chart.fillna(0).round(2))
+
+# Data Table and Download
+st.markdown("### 📄 Filtered Data Table")
 st.dataframe(filtered_df.head(100))
 
 csv = filtered_df.to_csv(index=False).encode('utf-8')
-st.download_button("⬇️ Download Filtered Data", data=csv, file_name="filtered_returnees.csv", mime='text/csv')
+st.download_button("⬇ Download Filtered Data", data=csv, file_name="filtered_returnees.csv", mime='text/csv')
+
