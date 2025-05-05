@@ -1,142 +1,93 @@
+import pandas as pd
 import dash
 from dash import dcc, html
-from dash.dependencies import Input, Output
-import pandas as pd
 import plotly.express as px
+from dash.dependencies import Input, Output
 
-# ---------------------------------
-# Data Loading & Preprocessing
-# ---------------------------------
+# Load the CSV
+df = pd.read_csv('hdx_hapi_returnees_lka.csv')
 
-# Load the dataset
-try:
-    df = pd.read_csv("hdx_hapi_returnees_lka.csv")
-except FileNotFoundError:
-    raise FileNotFoundError("The file 'hdx_hapi_returnees_lka.csv' was not found.")
+# Check and clean column names
+df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
 
-# Standardize column names
-df.columns = df.columns.str.strip().str.lower()
+# Example expected columns: district, returnees, month
+# If "month" is a date column, convert it
+if 'month' in df.columns:
+    try:
+        df['month'] = pd.to_datetime(df['month'])
+    except:
+        pass
 
-# Print available columns for debugging
-print("Available columns in the dataset:", df.columns.tolist())
-print("First few rows of the dataset:\n", df.head())
+# Initialize the Dash app
+app = dash.Dash(_name_)
+app.title = "Returnees Dashboard - Sri Lanka"
 
-# Try to map alternative names to expected names
-column_mapping = {
-    "district_name": "district",
-    "returnees_count": "returnees",
-    "reported_date": "date",
-    "districts": "district",
-    "num_returnees": "returnees"
-}
-df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns}, inplace=True)
-
-# Ensure expected columns exist
-required_columns = ['district', 'returnees', 'date']
-missing_cols = [col for col in required_columns if col not in df.columns]
-
-if missing_cols:
-    raise ValueError(f"Missing required column(s): {', '.join(missing_cols)}")
-
-# Convert date column to datetime
-df['date'] = pd.to_datetime(df['date'], errors='coerce')
-
-# Drop rows with missing or invalid dates
-df = df.dropna(subset=['date'])
-
-# Ensure 'returnees' column is numeric
-df['returnees'] = pd.to_numeric(df['returnees'], errors='coerce').fillna(0)
-
-# Drop rows with missing 'district'
-df = df.dropna(subset=['district'])
-
-# Prepare dropdown options
-district_options = [{"label": i, "value": i} for i in sorted(df["district"].unique())]
-
-# ---------------------------------
-# Dash App Setup
-# ---------------------------------
-
-app = dash.Dash(__name__)
-app.title = "Sri Lanka Returnees Dashboard"
-
+# Main layout
 app.layout = html.Div([
     html.H1("Sri Lanka Returnees Dashboard", style={'textAlign': 'center'}),
 
     html.Div([
         html.Label("Select District:"),
         dcc.Dropdown(
-            options=district_options,
-            value=None,
-            id="district-dropdown",
-            placeholder="Choose a district"
+            id='district-dropdown',
+            options=[{'label': d, 'value': d} for d in df['district'].dropna().unique()],
+            value=df['district'].dropna().unique()[0]
         )
-    ], style={'width': '40%', 'margin': 'auto'}),
+    ], style={'width': '50%', 'margin': 'auto'}),
 
     html.Br(),
 
-    html.Div(id="summary-stats", style={'textAlign': 'center', 'fontSize': 18}),
-
-    dcc.Graph(id="time-series-graph"),
-
-    dcc.Graph(id="map-graph")
+    html.Div([
+        dcc.Graph(id='bar-chart'),
+        dcc.Graph(id='time-series')
+    ])
 ])
 
-# ---------------------------------
-# Callbacks
-# ---------------------------------
 
+# Callbacks to update charts
 @app.callback(
-    [Output("summary-stats", "children"),
-     Output("time-series-graph", "figure"),
-     Output("map-graph", "figure")],
-    [Input("district-dropdown", "value")]
+    [Output('bar-chart', 'figure'),
+     Output('time-series', 'figure')],
+    [Input('district-dropdown', 'value')]
 )
-def update_dashboard(selected_district):
-    filtered_df = df.copy()
-    if selected_district:
-        filtered_df = filtered_df[filtered_df["district"] == selected_district]
+def update_charts(selected_district):
+    filtered_df = df[df['district'] == selected_district]
 
-    total = int(filtered_df["returnees"].sum())
-    latest_date = filtered_df["date"].max()
-    latest_returnees = 0
-    if pd.notnull(latest_date):
-        latest_returnees = int(filtered_df[filtered_df["date"] == latest_date]["returnees"].sum())
-
-    summary = f"Total Returnees: {total:,} | Latest Month Returnees: {latest_returnees:,} ({latest_date.date() if latest_date else 'N/A'})"
-
-    # Time-series chart
-    time_fig = px.line(
-        filtered_df,
-        x="date",
-        y="returnees",
-        color="district" if not selected_district else None,
-        title="Returnees Over Time"
-    )
-
-    # Map
-    if {'latitude', 'longitude'}.issubset(df.columns):
-        map_fig = px.scatter_mapbox(
+    # Bar chart: Total returnees by sub-district or other category if available
+    if 'ds_division' in filtered_df.columns:
+        bar_fig = px.bar(
             filtered_df,
-            lat="latitude",
-            lon="longitude",
-            color="returnees",
-            size="returnees",
-            hover_name="district",
-            mapbox_style="carto-positron",
-            title="Geographic Distribution of Returnees"
+            x='ds_division',
+            y='returnees',
+            title=f"Returnees by DS Division in {selected_district}",
+            labels={'returnees': 'Number of Returnees', 'ds_division': 'DS Division'}
         )
     else:
-        map_fig = px.scatter(title="Map data not available (Missing latitude/longitude columns)")
+        bar_fig = px.bar(
+            filtered_df,
+            x='month',
+            y='returnees',
+            title=f"Returnees Over Time in {selected_district}"
+        )
 
-    return summary, time_fig, map_fig
+    # Time series chart
+    if 'month' in filtered_df.columns:
+        time_fig = px.line(
+            filtered_df.sort_values('month'),
+            x='month',
+            y='returnees',
+            title=f"Monthly Returnees Trend in {selected_district}",
+            markers=True
+        )
+    else:
+        time_fig = px.scatter(title="Time data not available")
 
-# ---------------------------------
-# Run the App
-# ---------------------------------
+    return bar_fig, time_fig
 
-if __name__ == "__main__":
-    app.run(debug=True, use_reloader=False)
+
+# Run the app
+if _name_ == '_main_':
+    app.run_server(debug=True)
 
 
 
