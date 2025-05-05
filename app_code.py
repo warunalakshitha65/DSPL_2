@@ -19,7 +19,7 @@ if 'month' in df.columns:
         pass
 
 # Initialize the Dash app
-app = dash.Dash(_name_)
+app = dash.Dash(__name__)
 app.title = "Returnees Dashboard - Sri Lanka"
 
 # Main layout
