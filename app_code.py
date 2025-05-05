@@ -3,6 +3,7 @@ from dash import dcc, html
 from dash.dependencies import Input, Output
 import pandas as pd
 import plotly.express as px
+import streamlit as st
 
 # Load the data
 df = pd.read_csv("hdx_hapi_returnees_lka.csv")
@@ -12,7 +13,7 @@ if 'date' in df.columns:
     df['date'] = pd.to_datetime(df['date'])
 
 # Start Dash app
-app = dash.Dash(_name_)
+app = dash.Dash(__name__)
 app.title = "Sri Lanka Returnees Dashboard"
 
 # Layout
